@@ -10,27 +10,36 @@ Anyway, since random sequences include sequences that are perceived as non-rando
 
 e.g. get linux randomness, and check it
 
-dd if=/dev/urandom of=linux.bin bs=1000000 count=800
-dieharder -g 201 -a -f linux.bin  | grep FAILED
+```
+$ dd if=/dev/urandom of=linux.bin bs=1000000 count=800
+$ dieharder -g 201 -a -f linux.bin  | grep FAILED
  marsaglia_tsang_gcd|   0|  10000000|     100|0.00000000|  FAILED  
       rgb_lagged_sum|   9|   1000000|     100|0.00000000|  FAILED  
       rgb_lagged_sum|  24|   1000000|     100|0.00000000|  FAILED  
       rgb_lagged_sum|  29|   1000000|     100|0.00000000|  FAILED
+      rgb_lagged_sum|  31|   1000000|     100|0.00000000|  FAILED  
+```
 
-
-The impacts are multiple
+The impacts of failing randomness tests are multiple
 - The prng logic might be perceived as suspicious 
 - Monte-Carlo types of tests based on suspicious prng are seen as biased
 
 # What makes this PRNG different ?
 
-This code generates a file which pass ALL dieharder tests
+The code in this repository implements a prng and generates a file which pass ALL dieharder tests
 
- gcc -march=native -O3 prng\_example.cpp -o prng\_example
+```
+$ gcc -march=native -O3 prng_example.cpp -o prng_example
 
- ./prng\_example prng\_example.bin
+$ time ./prng_example prng_example.bin
+real	0m2.557s
+user	0m0.969s
+sys	    0m1.585s
 
- dieharder -a -g 201 -f prng\_example.bin
+$ ls -la prng_example.bin 
+-rw-rw-r-- 1 xxxxxx xxxxxx 880000000 May 23 13:42 prng_example.bin
+
+$ dieharder -a -g 201 -f prng_example.bin
 
 #=============================================================================#
 #            dieharder version 3.31.1 Copyright 2003 Robert G. Brown          #
@@ -154,10 +163,10 @@ rgb_minimum_distance|   5|     10000|    1000|0.17178114|  PASSED
        dab_filltree2|   0|   5000000|       1|0.94176042|  PASSED  
        dab_filltree2|   1|   5000000|       1|0.35888228|  PASSED  
         dab_monobit2|  12|  65000000|       1|0.61299683|  PASSED  
+```
 
+# Reuse the code ?
 
-
-
-It is not complex to generate, if needed, a library from this C standalone file. Just remove the main().
+It is not complex to build, if needed, a library from this C standalone file. Just remove the main() function and rename the file .h .
 
 
