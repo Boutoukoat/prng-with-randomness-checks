@@ -9,17 +9,20 @@ struct prng_rand_t
 {
     __m128i key[9];
     __m128i state;
+    union prng_bytes_16_t {
+        __m128i unused;
+        uint8_t r[16];
+    } __attribute__((__packed__)) u;
+
     uint64_t seed1;
     uint64_t seed2;
+    unsigned left;
 };
-
-union prng_bytes_16_t {
-    uint64_t s[2];
-    uint8_t r[16];
-} __attribute__((__packed__));
 
 void prng_init_rand(prng_rand_t *c, uint64_t s)
 {
+    c->left = 15;
+    c->u.unused = _mm_setzero_si128();
     c->seed1 = s;
     c->seed2 = ~(s * s);
     // a few hexisms to initiate a state
@@ -66,39 +69,52 @@ void prng_init_rand(prng_rand_t *c, uint64_t s)
 
 void prng_get_rand(prng_rand_t *c, uint8_t *r, unsigned len)
 {
-    __m128i b, a = c->state;
-    prng_bytes_16_t u;
-    while (len > 0)
+    // copy randomness left from the last calculations
+    if (c->left < 15)
     {
-        // 2 Linear congruential generators with known period 2^64
-        // refresh the seeds mod 2^64
-        c->seed1 *= 137;
-        c->seed1 += 13;
-        c->seed2 *= 11213;
-        c->seed2 += 132049;
-        // insert the seeds in the state
-        a = _mm_insert_epi64(a, (c->seed1 >> 31) ^ (c->seed1 << 13) ^ (c->seed2), 1);
-        // 3 rounds of AES block cipher applied to the state
-        a = _mm_aesenc_si128(a, c->key[0]);
-        a = _mm_aesenc_si128(a, c->key[1]);
-        a = _mm_aesenc_si128(a, c->key[2]);
-        // 6 rounds of AES block cipher applied to
-        b = _mm_aesenc_si128(a, c->key[3]);
-        b = _mm_aesenc_si128(b, c->key[4]);
-        b = _mm_aesenc_si128(b, c->key[5]);
-        b = _mm_aesenc_si128(b, c->key[6]);
-        b = _mm_aesenc_si128(b, c->key[7]);
-        b = _mm_aesenc_si128(b, c->key[8]);
-        // extract the AES output
-        u.s[0] = _mm_extract_epi64(b, 0);
-        u.s[1] = _mm_extract_epi64(b, 1);
-        // copy the requested amount, up to 15 bytes (1 byte is discarded)
-        unsigned l = len > 15 ? 15 : len;
-        memcpy(r, &u.r[0], l);
+        unsigned l = len > 15 - c->left ? 15 - c->left : len;
+        memcpy(r, &c->u.r[c->left], l);
+        c->left += l;
+        c->left = c->left >= 15 ? 0 : c->left;
         r += l;
         len -= l;
     }
-    c->state = a;
+
+    if (len)
+    {
+        __m128i b, a = _mm_loadu_si128(&c->state);
+        while (len > 0)
+        {
+            // 2 Linear congruential generators with known period 2^64
+            // refresh the seeds mod 2^64
+            c->seed1 *= 137;
+            c->seed1 += 13;
+            c->seed2 *= 11213;
+            c->seed2 += 132049;
+            // insert the seeds in the state
+            a = _mm_insert_epi64(a, (c->seed1 >> 31) ^ (c->seed1 << 13) ^ (c->seed2), 1);
+            // 3 rounds of AES block cipher applied to the state
+            a = _mm_aesenc_si128(a, c->key[0]);
+            a = _mm_aesenc_si128(a, c->key[1]);
+            a = _mm_aesenc_si128(a, c->key[2]);
+            // 6 rounds of AES block cipher applied to the prng output
+            b = _mm_aesenc_si128(a, c->key[3]);
+            b = _mm_aesenc_si128(b, c->key[4]);
+            b = _mm_aesenc_si128(b, c->key[5]);
+            b = _mm_aesenc_si128(b, c->key[6]);
+            b = _mm_aesenc_si128(b, c->key[7]);
+            b = _mm_aesenc_si128(b, c->key[8]);
+            // extract the AES output
+            _mm_storeu_si128(&c->u.unused, b);
+            // copy the requested amount, up to 15 bytes (1 byte is discarded)
+            unsigned l = len > 15 ? 15 : len;
+            memcpy(r, &c->u.r[0], l);
+            c->left = l;
+            r += l;
+            len -= l;
+        }
+        _mm_storeu_si128(&c->state, a);
+    }
 }
 
 int main(int argc, const char **argv)
@@ -110,32 +126,32 @@ int main(int argc, const char **argv)
     }
 
     FILE *fd = fopen(filename, "wb");
-    if (fd)
-    {
-        uint8_t r[44000];
-        prng_rand_t c;
-
-        // initialize the generator
-        prng_init_rand(&c, 100);
-
-        for (int i = 0; i < 20000; i++)
-        {
-            // get randomness
-            prng_get_rand(&c, r, 44000);
-
-            if (fwrite(r, 44, 1000, fd) != 1000)
-            {
-                printf("Unable to write to file %s\n", filename);
-                exit(1);
-            }
-        }
-
-        fclose(fd);
-    }
-    else
+    if (!fd)
     {
         printf("Unable to open file %s\n", filename);
         exit(1);
     }
+
+    const unsigned block_size = 11213;    // 11213 arbittrary size
+    uint8_t r[block_size];
+    prng_rand_t c;
+
+    // initialize the generator with an arbitrary seed "111"
+    prng_init_rand(&c, 111);
+
+    // generate a file of approx 0.88 GB
+    for (int i = 0; i < (880000000 / block_size); i++)
+    {
+        // get randomness by blocks 
+        prng_get_rand(&c, r, block_size);
+
+        if (fwrite(r, 1, block_size, fd) != block_size)
+        {
+            printf("Unable to write to file %s\n", filename);
+            exit(1);
+        }
+    }
+
+    fclose(fd);
     return (0);
 }
