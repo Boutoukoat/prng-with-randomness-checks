@@ -75,7 +75,6 @@ void prng_get_rand(prng_rand_t *c, uint8_t *r, unsigned len)
         unsigned l = len > 15 - c->left ? 15 - c->left : len;
         memcpy(r, &c->u.r[c->left], l);
         c->left += l;
-        c->left = c->left >= 15 ? 0 : c->left;
         r += l;
         len -= l;
     }
