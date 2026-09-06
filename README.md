@@ -41,7 +41,14 @@ The structure of this generator is very simple, it is the combination of 3 known
 - https://en.wikipedia.org/wiki/Feistel_cipher
 - https://en.wikipedia.org/wiki/Trapdoor_function
 
-# Dieharder
+2 files for 2 different prngs with same simple construction, less than 100 lines of code.
+
+- prng_example.cpp
+- prng_aes_example.cpp
+
+The file prng_example.cpp contains a 64-bit simple generator, The file prng_aes_example.cpp contains a 128-bit simple generator where a LCG provides a nearly-infinite AES key schedule.
+
+# Dieharder tests
 
 The diehard tests are a battery of statistical tests for measuring the quality of a random number generator 
 
@@ -50,9 +57,9 @@ https://en.wikipedia.org/wiki/Diehard_tests
 ```
 $ sudo apt-get install dieharder
 
-$ gcc -march=native -O3 prng_example.cpp -o prng_example
+$ g++ -march=native -O3 prng_aes_example.cpp -o prng_example
 
-$ time ./prng_example prng_example.bin
+$ time ./prng_example -mb 4096 -f prng_example.bin
 real    0m18.079s
 user    0m4.795s
 sys     0m4.349s
@@ -60,7 +67,7 @@ sys     0m4.349s
 $ wc -c prng_example.bin
 4294967296 prng_example.bin
 
-$ dieharder -a -g 201 -f prng_example.bin
+$ dieharder -a -g 200 -f prng_example.bin
 
 #=============================================================================#
 #            dieharder version 3.31.1 Copyright 2003 Robert G. Brown          #
@@ -193,7 +200,7 @@ PractRand provides statistical tests and pseudo-random number generators
 PractRand can be found and installed from https://pracrand.sourceforge.net https://sourceforge.net/projects/pracrand/files
 
 ```
-cat prng_example.bin | tools/RNG_test stdin
+$ ./prng_example | tools/RNG_test stdin64
 RNG_test using PractRand version 0.96
 RNG = RNG_stdin, seed = unknown
 test set = core, folding = standard(unknown format)
@@ -231,7 +238,7 @@ length= 8 gigabytes (2^33 bytes), time= 283 seconds
   no anomalies in 274 test result(s)
 ```
 
-# SmokeRand test
+# SmokeRand tests
 
 SmokeRand is a set of tests for pseudorandom number generators (PRNGs). Tested generators should return either 32-bit or 64-bit unsigned uniformly distributed unsigned integers.
 
@@ -239,7 +246,7 @@ SmokeRand can be found and installed from https://github.com/alvoskov/SmokeRand
 
 
 ```
-./prng_example  | bin/smokerand full stdin64
+./prng_example | bin/smokerand full stdin64
     # Test name                    xemp              p Interpretation  Thr#
 -------------------------------------------------------------------------------
     1 monobit_freq             0.485565          0.314 Ok                 0

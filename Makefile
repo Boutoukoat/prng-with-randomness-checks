@@ -1,15 +1,18 @@
 
-all: ./prng_example
+all: ./prng_example ./prng_aes_example
 
 ./prng_example: prng_example.cpp
 	g++ -O3 -march=native -o prng_example prng_example.cpp
 
+./prng_aes_example: prng_aes_example.cpp
+	g++ -O3 -march=native -o prng_aes_example prng_aes_example.cpp
+
 tests: ./prng_example
 	@echo ""
 	@echo "---------------------------------------------------------"
-	@echo "Generate a file about 1 GB"
+	@echo "Generate a file about 4 GB"
 	@echo ""
-	./prng_example prng_example.bin
+	./prng_example -mb 4096 -f prng_example.bin
 	@echo ""
 	@echo "---------------------------------------------------------"
 	@echo "Test the file"
